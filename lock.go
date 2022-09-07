@@ -10,6 +10,12 @@ else
     return 0
 end`
 
+const ExpireScript = `if redis.call("GET", KEYS[1]) == ARGV[1] then
+		return redis.call("PEXPIRE", KEYS[1], ARGV[2])
+	else
+		return 0
+	end`
+
 type LockHasExpired interface {
 	Lock(key string, value interface{}, expiration time.Duration) error
 	UnLock(key string, value interface{}) (interface{}, error)
