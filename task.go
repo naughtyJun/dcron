@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/sirupsen/logrus"
 	"math/rand"
+	"os"
 	"runtime"
 	"time"
 )
@@ -45,6 +46,7 @@ func RunOnce(task CronTask) {
 
 func GenTaskId(prefix string) string {
 	value := time.Now().Unix()
+	hostname, _ := os.Hostname()
 	rand.Seed(value)
-	return fmt.Sprintf("task_id:%s-%d-%d", prefix, value, rand.Intn(1000))
+	return fmt.Sprintf("task_id:%s-%s-%d-%d", prefix, hostname, value, rand.Intn(100))
 }

@@ -1,4 +1,4 @@
-module dcron
+module github.com/junjie-bianjie/dcron
 
 go 1.17
 

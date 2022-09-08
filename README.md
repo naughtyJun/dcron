@@ -5,9 +5,9 @@
 ## How to use
 
 ```go
-d := NewDistributedTask(redisClient)
-d.RegisterTasks(&HelloTask{})
-d.Start()
+    d := NewDistributedTask(redisClient)
+    d.RegisterTasks(&HelloTask{})
+    d.Start()
 ```
 
 ## Implement LockHasExpired interface 
