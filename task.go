@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/sirupsen/logrus"
 	"math/rand"
+	"runtime"
 	"time"
 )
 
@@ -18,9 +19,15 @@ type (
 
 func RunOnce(task CronTask) {
 	defer func() {
-		if err := recover(); err != nil {
-			logrus.WithField("err", err).
-				Errorf("task[%s] panic", task.Name())
+		if r := recover(); r != nil {
+			const size = 64 << 10
+			buf := make([]byte, size)
+			buf = buf[:runtime.Stack(buf, false)]
+			err, ok := r.(error)
+			if !ok {
+				err = fmt.Errorf("%v", r)
+			}
+			logrus.WithField("err", err).Errorf("task[%s] panic, stack:%v", task.Name(), string(buf))
 		}
 	}()
 
