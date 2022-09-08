@@ -70,7 +70,7 @@ func (d *DistributedTask) RunOnceWithLock(task CronTask) {
 		for {
 			select {
 			case <-t.C:
-				d.ReNewExpiration(task.Name())
+				d.ReNewExpiration(task.Name(), value)
 			case <-stop:
 				logrus.WithField("key", task.Name()).Debug("expired")
 				return
@@ -87,7 +87,7 @@ func (d *DistributedTask) RunOnceWithLock(task CronTask) {
 	}
 }
 
-func (d *DistributedTask) ReNewExpiration(key string) {
+func (d *DistributedTask) ReNewExpiration(key string, value interface{}) {
 	ttl, err := d.l.TTL(key)
 	if err != nil {
 		logrus.WithField("key", key).Error("get ttl failed")
@@ -98,7 +98,7 @@ func (d *DistributedTask) ReNewExpiration(key string) {
 	}
 
 	if ttl <= d.Expiration()/3 {
-		if _, err := d.l.Expire(key, d.Expiration()); err != nil {
+		if _, err := d.l.Expire(key, value, d.Expiration()); err != nil {
 			logrus.WithField("key", key).
 				WithField("err", err.Error()).
 				Error("expired failed")

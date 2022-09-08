@@ -5,9 +5,9 @@
 ## How to use
 
 ```go
-	d := NewDistributedTask(redisClient)
-	d.RegisterTasks(&HelloTask{})
-	d.Start()
+d := NewDistributedTask(redisClient)
+d.RegisterTasks(&HelloTask{})
+d.Start()
 ```
 
 ## Implement LockHasExpired interface 
@@ -16,7 +16,7 @@
 type LockHasExpired interface {
 	Lock(key string, value interface{}, expiration time.Duration) error
 	UnLock(key string, value interface{}) (interface{}, error)
-	Expire(key string, expiration time.Duration) (bool, error)
+    Expire(key string, value interface{}, expiration time.Duration) (interface{}, error)
 	TTL(key string) (time.Duration, error)
 }
 ```
@@ -77,12 +77,12 @@ func (r *Client) UnLock(key string, value interface{}) (interface{}, error) {
 }
 
 // Expire RedisClient `expire` command
-func (r *Client) Expire(key string, expiration time.Duration) (bool, error) {
-	result, err := r.redisClient.Expire(context.Background(), key, expiration).Result()
-	if err != nil && err != v8.Nil {
-		logrus.Error("redis Expire fail, ", err.Error())
-	}
-	return result, err
+func (r *Client) Expire(key string, value interface{}, expiration time.Duration) (interface{}, error) {
+    res, err := r.redisClient.Eval(context.Background(), expireScript, []string{key}, value, int(expiration/time.Millisecond)).Result()
+    if err != nil {
+        logrus.Error("redis execute expire script fail, ", err.Error())
+    }
+    return res, err
 }
 
 func (r *Client) TTL(key string) (time.Duration, error) {

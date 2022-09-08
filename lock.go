@@ -19,7 +19,7 @@ const ExpireScript = `if redis.call("GET", KEYS[1]) == ARGV[1] then
 type LockHasExpired interface {
 	Lock(key string, value interface{}, expiration time.Duration) error
 	UnLock(key string, value interface{}) (interface{}, error)
-	Expire(key string, expiration time.Duration) (bool, error)
+	Expire(key string, value interface{}, expiration time.Duration) (interface{}, error)
 	TTL(key string) (time.Duration, error)
 }
 
@@ -34,7 +34,7 @@ func (d *WithoutLock) UnLock(string, interface{}) (interface{}, error) {
 	return nil, nil
 }
 
-func (d *WithoutLock) Expire(string, time.Duration) (bool, error) {
+func (d *WithoutLock) Expire(key string, value interface{}, expiration time.Duration) (interface{}, error) {
 	return true, nil
 }
 
