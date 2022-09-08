@@ -18,7 +18,7 @@ func Init() {
 	redisClient := v8.NewClient(&v8.Options{
 		Addr:     "127.0.0.1:6379",
 		Username: "",
-		Password: "12345",
+		Password: "",
 	})
 	RClient = New(redisClient)
 }

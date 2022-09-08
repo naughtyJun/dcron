@@ -12,23 +12,16 @@ func (h *HelloTask) Name() string {
 	return "hello"
 }
 
-func (h *HelloTask) BeforeHooks() error {
-	return nil
-}
-
-func (h *HelloTask) AfterHooks() error {
-	time.Sleep(3 * time.Second)
-	fmt.Println("ccc")
+func (h *HelloTask) BeforeHook() error {
 	return nil
 }
 
 func (h *HelloTask) Cron() string {
-	return "*/30 * * * * *"
+	return "*/12 * * * * *"
 }
 
 func (h *HelloTask) Run() {
 	fmt.Println("hello world do .... wait sleep")
-	panic("panic this hello")
-	//time.Sleep(5 * time.Second)
+	time.Sleep(30 * time.Second)
 	fmt.Println("hello world done")
 }
