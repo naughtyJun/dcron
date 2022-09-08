@@ -60,7 +60,10 @@ func (d *DistributedTask) Start() {
 func (d *DistributedTask) RunOnceWithLock(task CronTask) {
 	value := GenTaskId(task.Name())
 	if err := d.l.Lock(task.Name(), value, d.Expiration()); err != nil {
-		logrus.Errorf("redis lock failed, key:%s, err:%v", task.Name(), err.Error())
+		logrus.WithField("key", task.Name()).
+			WithField("err", err.Error()).
+			Errorf("redis lock failed")
+
 		return
 	}
 
