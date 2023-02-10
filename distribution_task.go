@@ -58,9 +58,10 @@ func (d *DistributedTask) Start() {
 }
 
 func (d *DistributedTask) RunOnceWithLock(task CronTask) {
+	logger := logrus.WithField("key", task.Name())
 	value := GenTaskId(task.Name())
 	if err := d.l.Lock(task.Name(), value, d.Expiration()); err != nil {
-		logrus.WithField("key", task.Name()).
+		logger.
 			WithField("err", err.Error()).
 			Errorf("redis lock failed")
 
@@ -75,7 +76,7 @@ func (d *DistributedTask) RunOnceWithLock(task CronTask) {
 			case <-t.C:
 				d.ReNewExpiration(task.Name(), value)
 			case <-stop:
-				logrus.WithField("key", task.Name()).Debug("expired")
+				logger.Debug("expired")
 				return
 			}
 		}
@@ -84,16 +85,17 @@ func (d *DistributedTask) RunOnceWithLock(task CronTask) {
 	RunOnce(task)
 	stop <- struct{}{}
 	if _, err := d.l.UnLock(task.Name(), value); err != nil {
-		logrus.WithField("key", task.Name()).
+		logger.
 			WithField("err", err.Error()).
 			Error("unlock failed")
 	}
 }
 
 func (d *DistributedTask) ReNewExpiration(key string, value interface{}) {
+	logger := logrus.WithField("key", key)
 	ttl, err := d.l.TTL(key)
 	if err != nil {
-		logrus.WithField("key", key).Error("get ttl failed")
+		logger.Error("get ttl failed")
 		return
 	}
 	if ttl == 0 {
@@ -102,10 +104,10 @@ func (d *DistributedTask) ReNewExpiration(key string, value interface{}) {
 
 	if ttl <= d.Expiration()/3 {
 		if _, err := d.l.Expire(key, value, d.Expiration()); err != nil {
-			logrus.WithField("key", key).
+			logger.
 				WithField("err", err.Error()).
 				Error("expired failed")
 		}
-		logrus.WithField("key", key).Debug("renew")
+		logger.Debug("renew")
 	}
 }

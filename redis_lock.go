@@ -3,7 +3,7 @@ package dcron
 import (
 	"context"
 	"errors"
-	v8 "github.com/go-redis/redis/v8"
+	redis "github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 	"time"
 )
@@ -15,7 +15,7 @@ var (
 )
 
 func Init() {
-	redisClient := v8.NewClient(&v8.Options{
+	redisClient := redis.NewClient(&redis.Options{
 		Addr:     "127.0.0.1:6379",
 		Username: "",
 		Password: "",
@@ -24,10 +24,10 @@ func Init() {
 }
 
 type Client struct {
-	redisClient v8.UniversalClient
+	redisClient redis.UniversalClient
 }
 
-func New(redisClient v8.UniversalClient) *Client {
+func New(redisClient redis.UniversalClient) *Client {
 	return &Client{
 		redisClient: redisClient,
 	}

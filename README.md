@@ -27,7 +27,7 @@ Let's implement redis Lock
 import (
 	"context"
 	"errors"
-	v8 "github.com/go-redis/redis/v8"
+	redis "github.com/go-redis/redis/redis"
 	"github.com/sirupsen/logrus"
 	"time"
 )
@@ -35,7 +35,7 @@ import (
 var RClient *Client
 
 func init() {
-	redisClient := v8.NewClient(&v8.Options{
+	redisClient := redis.NewClient(&redis.Options{
 		Addr:     "127.0.0.1:6379",
 		Username: "",
 		Password: "",
@@ -44,10 +44,10 @@ func init() {
 }
 
 type Client struct {
-	redisClient v8.UniversalClient
+	redisClient redis.UniversalClient
 }
 
-func New(redisClient v8.UniversalClient) *Client {
+func New(redisClient redis.UniversalClient) *Client {
 	return &Client{
 		redisClient: redisClient,
 	}
