@@ -5,18 +5,26 @@
 ## How to use
 
 ```go
-    d := NewDistributedTask(redisClient)
+    d := NewDistributedTask(redisClient, "YOUR_NAME_SPACE", "YOUR_SERVER_NAME")
     d.RegisterTasks(&HelloTask{})
     d.Start()
+```
+
+## Task Mode
+
+```go
+ModeDefault             Mode = iota //每到执行时间直接执行，不管前面任务执行是否完成
+ModeSkipIfStillRunning              //到了执行时间，前面任务执行未完成，则直接跳过，本次不执行，等待下次执行时间
+ModeDelayIfStillRunning             //到了执行时间，前面任务执行未完成，则等待其完成后立即执行(可能造成任务堆积，不建议使用)
 ```
 
 ## Implement LockHasExpired interface 
 
 ```go
 type LockHasExpired interface {
-	Lock(key string, value interface{}, expiration time.Duration) error
+	Lock(key string, value interface{}, expiration time.Duration) (bool, error)
 	UnLock(key string, value interface{}) (interface{}, error)
-    Expire(key string, value interface{}, expiration time.Duration) (interface{}, error)
+    ExpireWithVal(key string, value interface{}, expiration time.Duration) (interface{}, error)
 	TTL(key string) (time.Duration, error)
 }
 ```
@@ -57,15 +65,8 @@ func (r *Client) Close() {
 	_ = r.redisClient.Close()
 }
 
-func (r *Client) Lock(key string, value interface{}, expiration time.Duration) error {
-	ok, err := r.redisClient.SetNX(context.Background(), key, value, expiration).Result()
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return errors.New("lock failed, key already use")
-	}
-	return nil
+func (r *Client) Lock(key string, value interface{}, expiration time.Duration) (bool, error) {
+	return r.redisClient.SetNX(context.Background(), key, value, expiration).Result()
 }
 
 func (r *Client) UnLock(key string, value interface{}) (interface{}, error) {
@@ -77,8 +78,8 @@ func (r *Client) UnLock(key string, value interface{}) (interface{}, error) {
 }
 
 // Expire RedisClient `expire` command
-func (r *Client) Expire(key string, value interface{}, expiration time.Duration) (interface{}, error) {
-    res, err := r.redisClient.Eval(context.Background(), expireScript, []string{key}, value, int(expiration/time.Millisecond)).Result()
+func (r *Client) ExpireWithVal(key string, value interface{}, expiration time.Duration) (interface{}, error) {
+    res, err := r.redisClient.Eval(context.Background(), ExpireScript, []string{key}, value, int(expiration/time.Millisecond)).Result()
     if err != nil {
         logrus.Error("redis execute expire script fail, ", err.Error())
     }
@@ -89,10 +90,4 @@ func (r *Client) TTL(key string) (time.Duration, error) {
 	keys := r.redisClient.TTL(context.Background(), key)
 	return keys.Result()
 }
-```
-
-Let's implement db Lock
-
-```go
-TODO
 ```

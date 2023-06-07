@@ -1,25 +1,38 @@
 package dcron
 
 import (
+	"fmt"
+	"math/rand"
+	"os"
+	"time"
+
 	"github.com/robfig/cron/v3"
 	"github.com/sirupsen/logrus"
-	"time"
 )
 
 type DistributedTask struct {
 	l          LockHasExpired
 	expiration time.Duration
 	tasks      []CronTask
+	nameSpace  string
+	serverName string
 }
 
-const defaultExpiration = 30 * time.Second
+const (
+	defaultExpiration   = 30 * time.Second
+	reNewTickerDuration = 10 * time.Second
+)
 
-func NewDistributedTask(l LockHasExpired) *DistributedTask {
-	return &DistributedTask{l: l}
+func NewDistributedTask(l LockHasExpired, nameSpace string, serverName string) *DistributedTask {
+	return &DistributedTask{
+		l:          l,
+		nameSpace:  nameSpace,
+		serverName: serverName,
+	}
 }
 
 func (d *DistributedTask) Expiration() time.Duration {
-	if d.expiration <= 10 {
+	if d.expiration <= defaultExpiration {
 		return defaultExpiration
 	}
 	return d.expiration
@@ -43,15 +56,28 @@ func (d *DistributedTask) Start() {
 	}
 
 	c := cron.New(cron.WithSeconds())
+	//c := cron.New(cron.WithSeconds(), cron.WithChain(cron.SkipIfStillRunning(cron.DefaultLogger)))
+	//c := cron.New(cron.WithSeconds(), cron.WithChain(cron.DelayIfStillRunning(cron.DefaultLogger)))
+
 	for _, v := range d.tasks {
 		t := v
-		_, err := c.AddFunc(t.Cron(), func() {
+		entry := logrus.WithField("task", t.Name())
+		log := newLogger(entry)
+		var jobWrapper cron.JobWrapper
+		switch t.Mode() {
+		case ModeSkipIfStillRunning:
+			jobWrapper = cron.SkipIfStillRunning(log)
+		case ModeDelayIfStillRunning:
+			jobWrapper = cron.DelayIfStillRunning(log)
+		default:
+			jobWrapper = func(job cron.Job) cron.Job { return job }
+		}
+		_, err := c.AddJob(t.Cron(), cron.NewChain(jobWrapper).Then(cron.FuncJob(func() {
 			d.RunOnceWithLock(t)
-		})
+		})))
+
 		if err != nil {
-			logrus.WithField("task", t.Name()).
-				WithField("err", err.Error()).
-				Fatal("add cron job err", err)
+			entry.WithError(err).Fatal("add cron job err")
 		}
 	}
 	c.Start()
@@ -59,24 +85,28 @@ func (d *DistributedTask) Start() {
 
 func (d *DistributedTask) RunOnceWithLock(task CronTask) {
 	logger := logrus.WithField("key", task.Name())
-	value := GenTaskId(task.Name())
-	if err := d.l.Lock(task.Name(), value, d.Expiration()); err != nil {
-		logger.
-			WithField("err", err.Error()).
-			Errorf("redis lock failed")
-
+	key := d.genLockKey(task.Name())
+	value := d.genLockValue(task.Name())
+	ok, err := d.l.Lock(key, value, d.Expiration())
+	if err != nil {
+		logger.WithError(err).Errorf("lock failed")
 		return
 	}
-
+	if !ok {
+		logger.Debug("not get lock")
+		return
+	}
 	stop := make(chan struct{})
-	t := time.NewTicker(10 * time.Second)
+	t := time.NewTicker(reNewTickerDuration)
+	defer t.Stop()
+
 	go func() {
 		for {
 			select {
 			case <-t.C:
-				d.ReNewExpiration(task.Name(), value)
+				d.ReNewExpiration(key, value)
 			case <-stop:
-				logger.Debug("expired")
+				logger.Debug("stop")
 				return
 			}
 		}
@@ -84,10 +114,8 @@ func (d *DistributedTask) RunOnceWithLock(task CronTask) {
 
 	RunOnce(task)
 	stop <- struct{}{}
-	if _, err := d.l.UnLock(task.Name(), value); err != nil {
-		logger.
-			WithField("err", err.Error()).
-			Error("unlock failed")
+	if _, err := d.l.UnLock(key, value); err != nil {
+		logger.WithError(err).Error("unlock failed")
 	}
 }
 
@@ -95,7 +123,7 @@ func (d *DistributedTask) ReNewExpiration(key string, value interface{}) {
 	logger := logrus.WithField("key", key)
 	ttl, err := d.l.TTL(key)
 	if err != nil {
-		logger.Error("get ttl failed")
+		logger.WithError(err).Error("get ttl failed")
 		return
 	}
 	if ttl == 0 {
@@ -103,11 +131,20 @@ func (d *DistributedTask) ReNewExpiration(key string, value interface{}) {
 	}
 
 	if ttl <= d.Expiration()/3 {
-		if _, err := d.l.Expire(key, value, d.Expiration()); err != nil {
-			logger.
-				WithField("err", err.Error()).
-				Error("expired failed")
+		if _, err := d.l.ExpireWithVal(key, value, d.Expiration()); err != nil {
+			logger.WithError(err).Error("expired failed")
 		}
 		logger.Debug("renew")
 	}
+}
+
+func (d *DistributedTask) genLockKey(taskName string) string {
+	return fmt.Sprintf("%s:%s:lock:%s", d.nameSpace, d.serverName, taskName)
+}
+
+func (d *DistributedTask) genLockValue(taskName string) string {
+	value := time.Now().UnixNano()
+	hostname, _ := os.Hostname()
+	rand.NewSource(value)
+	return fmt.Sprintf("task_id:%s-%s-%d-%d", taskName, hostname, value, rand.Intn(100))
 }

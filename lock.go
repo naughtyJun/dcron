@@ -17,24 +17,24 @@ const ExpireScript = `if redis.call("GET", KEYS[1]) == ARGV[1] then
 	end`
 
 type LockHasExpired interface {
-	Lock(key string, value interface{}, expiration time.Duration) error
+	Lock(key string, value interface{}, expiration time.Duration) (bool, error)
 	UnLock(key string, value interface{}) (interface{}, error)
-	Expire(key string, value interface{}, expiration time.Duration) (interface{}, error)
+	ExpireWithVal(key string, value interface{}, expiration time.Duration) (interface{}, error)
 	TTL(key string) (time.Duration, error)
 }
 
 type WithoutLock struct {
 }
 
-func (d *WithoutLock) Lock(string, interface{}, time.Duration) error {
-	return nil
+func (d *WithoutLock) Lock(string, interface{}, time.Duration) (bool, error) {
+	return true, nil
 }
 
 func (d *WithoutLock) UnLock(string, interface{}) (interface{}, error) {
 	return nil, nil
 }
 
-func (d *WithoutLock) Expire(key string, value interface{}, expiration time.Duration) (interface{}, error) {
+func (d *WithoutLock) ExpireWithVal(key string, value interface{}, expiration time.Duration) (interface{}, error) {
 	return true, nil
 }
 

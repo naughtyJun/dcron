@@ -2,23 +2,33 @@ package dcron
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
-	"math/rand"
-	"os"
 	"runtime"
 	"time"
+
+	"github.com/sirupsen/logrus"
+)
+
+const (
+	ModeDefault             Mode = iota //每到执行时间直接执行，不管前面任务执行是否完成
+	ModeSkipIfStillRunning              //到了执行时间，前面任务执行未完成，则直接跳过，本次不执行，等待下次执行时间
+	ModeDelayIfStillRunning             //到了执行时间，前面任务执行未完成，则等待其完成后立即执行(可能造成任务堆积，不建议使用)
 )
 
 type (
+	Mode int
+
 	CronTask interface {
 		Name() string
 		Cron() string
 		BeforeHook() error // init or status's judge in this
 		Run()
+		Mode() Mode
 	}
 )
 
 func RunOnce(task CronTask) {
+	logger := logrus.WithField("task", task.Name())
+
 	defer func() {
 		if r := recover(); r != nil {
 			const size = 64 << 10
@@ -28,25 +38,17 @@ func RunOnce(task CronTask) {
 			if !ok {
 				err = fmt.Errorf("%v", r)
 			}
-			logrus.WithField("err", err).Errorf("task[%s] panic, stack:%v", task.Name(), string(buf))
+			logger.WithError(err).Errorf("panic, stack:%v", string(buf))
 		}
 	}()
 
 	start := time.Now().Unix()
-	logrus.Infof("task[%s] start", task.Name())
+	logger.Debug("start")
 
 	if err := task.BeforeHook(); err != nil {
-		logrus.WithField("err", err.Error()).
-			Errorf("task[%s] %s error", task.Name(), "beforeHooks")
+		logger.WithField("method", "BeforeHook").WithError(err).Error()
 	} else {
 		task.Run()
 	}
-	logrus.Infof("task[%s] end, use %d(second)", task.Name(), time.Now().Unix()-start)
-}
-
-func GenTaskId(prefix string) string {
-	value := time.Now().Unix()
-	hostname, _ := os.Hostname()
-	rand.Seed(value)
-	return fmt.Sprintf("task_id:%s-%s-%d-%d", prefix, hostname, value, rand.Intn(100))
+	logger.Infof("end, use %d(second)", time.Now().Unix()-start)
 }
